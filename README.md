@@ -81,6 +81,31 @@ change wins). A repo can always opt out:
 { "autoSession": false }
 ```
 
+### Main-checkout containment guard
+
+The auto-session guard keys on the session id, and subagents get ids of their
+own — so a second, identity-free guard backs it up: any session or subagent
+rooted inside a linked worktree of a repo is denied file-edit tools targeting
+that repo's main checkout, and the structured read tools (Read, Glob, Grep,
+NotebookRead) too — reading the main checkout's working files means reading
+another branch's code, which poisons the analysis with stale state.
+("Compare with main" belongs in git anyway: `git diff` / `git log` inside the
+worktree read the shared object store and never touch the main checkout's
+files.) Glob/Grep with no explicit path default to the worktree cwd and are
+allowed. It uses no session identity and no store — just `ZCODE_PROJECT_DIR`
+plus git worktree topology. Scope is the same *soft for commands, hard for
+edits* line as above (Bash is guided by injected instructions), and sessions
+rooted in the main checkout itself are never policed by it. The opt-out below
+lifts reads and writes together. Do main-checkout work from a
+main-checkout-rooted session, or opt a repo out:
+
+```json
+// .zcode/worktree.json in the repo
+{ "mainCheckoutGuard": false }
+```
+
+It fails open on any error.
+
 ## Repo-side configuration (optional)
 
 `.worktreeinclude` — gitignore-style patterns; only files that are *also*
@@ -132,7 +157,8 @@ them expose to plugins.
 ## Tests
 
 ```sh
-npm test   # 130 tests: 81 unit (validators, state, carry-over, hooks, edit guard)
+npm test   # 143 tests: 94 unit (validators, state, carry-over, hooks, edit
+           #        guard, main-checkout containment guard)
            #        + 13 integration (real MCP stdio JSON-RPC + protocol edges)
            #        + 36 adversarial & security (hostile names, races, corrupt
            #           state, out-of-band damage, exploit regressions)
